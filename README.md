@@ -105,6 +105,7 @@ sc.pp.pca(adata)
 **Principal Component Analysis (PCA)** reduces thousands of gene dimensions down
 to 50 principal components that capture the most variance in the data. This makes
 computation faster and removes noise.
+<img width="660" height="1079" alt="img 5" src="https://github.com/user-attachments/assets/82338325-1c8a-4e9d-a7bd-9870ab03416f" />
 
 ---
 
@@ -126,6 +127,8 @@ sc.pl.umap(adata, color=["total_counts", "n_genes_by_counts"])
 transcriptionally similar appear close together on the UMAP plot. This helps
 us visually identify distinct cell populations.
 
+<img width="661" height="921" alt="img6" src="https://github.com/user-attachments/assets/a5837d54-945e-4a1a-b0fc-f6c7fdfb12b2" />
+
 ---
 
 ### Step 8 — Leiden Clustering
@@ -136,6 +139,8 @@ sc.tl.leiden(adata, key_added="clusters", flavor="igraph", directed=False, n_ite
 Each cluster ideally represents a distinct cell type or brain region. Results are
 stored in `adata.obs["clusters"]`.
 
+<img width="2294" height="1091" alt="img7" src="https://github.com/user-attachments/assets/37e9e41c-0391-4b41-81d3-fee4f51b9b56" />
+
 ---
 
 ### Step 9 — Spatial Visualization
@@ -145,6 +150,8 @@ sc.pl.spatial(adata, img_key="hires", color=["clusters"])
 Clusters are overlaid on the **actual tissue image**. This is the key advantage
 of spatial transcriptomics — we can see exactly where each cell type is located
 in the brain tissue.
+
+<img width="2239" height="1091" alt="img8" src="https://github.com/user-attachments/assets/4ea12e7f-6575-4449-8766-dda28147c917" />
 
 ---
 
@@ -157,6 +164,9 @@ Individual gene expression is plotted on the tissue image:
 - **SYPL1** — associated with synaptic vesicles in neurons
 
 This shows us exactly which spatial regions of the brain express these genes.
+
+<img width="1147" height="1079" alt="img9" src="https://github.com/user-attachments/assets/e7e20594-296c-4d05-bbde-6da2efb4cd74" />
+
 
 ---
 
