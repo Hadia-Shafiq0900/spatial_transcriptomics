@@ -349,6 +349,196 @@ pandas
 matplotlib
 
 ---
+
+# 🧠 Squidpy Visium H&E Analysis — Mouse Brain Spatial Transcriptomics
+
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python)
+![Squidpy](https://img.shields.io/badge/Squidpy-latest-green)
+![Scanpy](https://img.shields.io/badge/Scanpy-latest-orange)
+![Platform](https://img.shields.io/badge/Platform-Google%20Colab-yellow?logo=googlecolab)
+![License](https://img.shields.io/badge/License-MIT-lightgrey)
+
+A complete implementation of the [Squidpy Visium H&E tutorial](https://squidpy.readthedocs.io/en/stable/notebooks/tutorials/tutorial_visium_hne.html), adapted and tested on **Google Colab**. This notebook demonstrates spatial transcriptomics analysis of a mouse brain coronal section using the 10x Genomics Visium platform.
+
+---
+
+## 📌 Overview
+
+This project covers end-to-end spatial transcriptomics analysis including:
+
+- **Image feature extraction** from high-resolution H&E tissue images
+- **Spatial graph construction** and neighborhood enrichment analysis
+- **Co-occurrence analysis** across spatial dimensions
+- **Ligand-receptor interaction analysis** using CellPhoneDB / Omnipath
+- **Spatially variable gene detection** using Moran's I statistic
+
+The dataset is a pre-processed, publicly available coronal section of the mouse brain from the [10x Genomics dataset portal](https://support.10xgenomics.com/spatial-gene-expression/datasets), with pre-annotated clusters.
+
+---
+
+## 📁 Repository Structure
+├── squidpy_visium_hne_tutorial.ipynb   # Main Colab notebook
+├── README.md                           # This file
+
+---
+
+## 🚀 Getting Started
+
+### ▶️ Run on Google Colab
+
+> Open the notebook via **File → Open notebook → GitHub** and paste this repo URL.
+
+### 🛠️ Installation
+
+Run this in the **first cell** of the notebook, then **restart the runtime**:
+
+```python
+!pip install squidpy scanpy anndata leidenalg -q
+```
+
+> ⚠️ **Important:** After installation, go to **Runtime → Restart session**, then run all remaining cells top to bottom.
+
+---
+
+## 📋 Step-by-Step Workflow
+
+### Step 1 — Import Packages & Load Data
+
+```python
+import numpy as np
+import pandas as pd
+import anndata as ad
+import scanpy as sc
+import squidpy as sq
+
+# Load pre-processed Visium H&E mouse brain dataset (~314MB, downloads automatically)
+img = sq.datasets.visium_hne_image()
+adata = sq.datasets.visium_hne_adata()
+```
+
+### Step 2 — Visualize Cluster Annotations in Spatial Context
+
+```python
+sq.pl.spatial_scatter(adata, color="cluster")
+```
+
+### Step 3 — Extract Multi-scale Image Features
+
+```python
+for scale in [1.0, 2.0]:
+    feature_name = f"features_summary_scale{scale}"
+    sq.im.calculate_image_features(
+        adata, img.compute(),
+        features="summary",
+        key_added=feature_name,
+        n_jobs=1,
+        scale=scale,
+    )
+
+adata.obsm["features"] = pd.concat(
+    [adata.obsm[f] for f in adata.obsm.keys() if "features_summary" in f],
+    axis="columns",
+)
+adata.obsm["features"].columns = ad.utils.make_index_unique(adata.obsm["features"].columns)
+```
+
+### Step 4 — Cluster Spots by Image Morphology (Leiden)
+
+```python
+def cluster_features(features, like=None):
+    if like is not None:
+        features = features.filter(like=like)
+    tmp = ad.AnnData(features)
+    sc.pp.scale(tmp)
+    sc.pp.pca(tmp, n_comps=min(10, features.shape[1] - 1))
+    sc.pp.neighbors(tmp)
+    sc.tl.leiden(tmp)
+    return tmp.obs["leiden"]
+
+adata.obs["features_cluster"] = cluster_features(adata.obsm["features"], like="summary")
+sq.pl.spatial_scatter(adata, color=["features_cluster", "cluster"])
+```
+
+### Step 5 — Neighborhood Enrichment Analysis
+
+```python
+sq.gr.spatial_neighbors(adata)
+sq.gr.nhood_enrichment(adata, cluster_key="cluster")
+sq.pl.nhood_enrichment(adata, cluster_key="cluster")
+```
+
+### Step 6 — Co-occurrence Analysis
+
+```python
+sq.gr.co_occurrence(adata, cluster_key="cluster")
+sq.pl.co_occurrence(adata, cluster_key="cluster", clusters="Hippocampus", figsize=(8, 4))
+```
+
+### Step 7 — Ligand-Receptor Interaction Analysis
+
+```python
+sq.gr.ligrec(adata, n_perms=100, cluster_key="cluster")
+sq.pl.ligrec(
+    adata,
+    cluster_key="cluster",
+    source_groups="Hippocampus",
+    target_groups=["Pyramidal_layer", "Pyramidal_layer_dentate_gyrus"],
+    means_range=(3, np.inf),
+    alpha=1e-4,
+    swap_axes=True,
+)
+```
+
+### Step 8 — Spatially Variable Genes with Moran's I
+
+```python
+genes = adata[:, adata.var.highly_variable].var_names.values[:1000]
+sq.gr.spatial_autocorr(adata, mode="moran", genes=genes, n_perms=100, n_jobs=1)
+
+adata.uns["moranI"].head(10)
+
+sq.pl.spatial_scatter(adata, color=["Olfm1", "Plp1", "Itpka", "cluster"])
+```
+
+---
+
+## 📊 Key Results
+
+| Analysis | Key Finding |
+|---|---|
+| | Fiber tract and Hippocampus regions recapitulated in morphology space |
+|  | High enrichment between *Pyramidal_layer_dentate_gyrus*, *Pyramidal_layer*, and *Hippocampus* |
+|<img width="1313" height="1022" alt="pic3" src="https://github.com/user-attachments/assets/8db285cf-6780-4515-830f-3f6f1ff2d5ea" />
+ | *Pyramidal_layer* co-occurs at short distances with *Hippocampus* |
+|  | Multiple candidate interactions identified in the Hippocampus region |
+| <img width="2586" height="431" alt="pic5" src="https://github.com/user-attachments/assets/be3d6add-732d-40fb-a4b1-f718b0b989db" />
+ | *Olfm1*, *Plp1*, *Itpka*, *Snap25* show strong spatial patterning |
+
+---
+
+
+
+## 🧬 Dataset
+
+| Property | Detail |
+|---|---|
+| **Species** | Mouse (*Mus musculus*) |
+| **Tissue** | Coronal brain section |
+| **Platform** | 10x Genomics Visium |
+| **Spots** | 2,688 |
+| **Source** | [10x Genomics Dataset Portal](https://support.10xgenomics.com/spatial-gene-expression/datasets) |
+| **Format** | AnnData (`.h5ad`) + ImageContainer |
+
+---
+
+
+---
+
+
+
+## 🙏 Acknowledgements
+
+Dataset sourced from the [10x Genomics public dataset portal](https://support.10xgenomics.com/spatial-gene-expression/datasets). Tutorial adapted from the official [Squidpy documentation](https://squidpy.readthedocs.io/) by the [scverse](https://scverse.org/) community.
 ## 📂 Dataset
 
 - **Source:** [10x Genomics Spatial Gene Expression Datasets](https://support.10xgenomics.com/spatial-gene-expression/datasets)
