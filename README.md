@@ -192,6 +192,171 @@ This shows us exactly which spatial regions of the brain express these genes.
 - **Spatial transcriptomics:** Measuring gene expression with spatial coordinates preserved
 
 ---
+# 🧠 Notebook:2 -Spatial Transcriptomics — Visium Fluorescence Analysis with Squidpy
+
+A complete spatial transcriptomics analysis pipeline applied to a **mouse brain coronal section** using [Squidpy](https://squidpy.readthedocs.io/). This project integrates fluorescence image processing, nucleus segmentation, and multi-scale image feature extraction to complement gene expression clustering.
+
+---
+
+## 📌 Overview
+
+10x Visium captures both **gene expression** and **high-resolution tissue images** per spot. This analysis goes beyond gene-space clustering by extracting rich image features from a three-channel fluorescence image, enabling a more fine-grained characterization of tissue regions — particularly in complex structures like the Hippocampus and Cortex.
+
+| Channel | Marker | Targets |
+|---------|--------|---------|
+| 0 | DAPI | DNA / nuclei |
+| 1 | anti-NEUN | Neurons |
+| 2 | anti-GFAP | Glial cells |
+
+---
+
+## 🔬 Analysis Pipeline
+
+### 1. Data Loading & Spatial Visualization
+
+The dataset is a pre-processed crop of a mouse brain Visium slide, pre-annotated with clusters derived using the Allen Brain Atlas and Linnarsson lab resources.
+
+```python
+import squidpy as sq
+
+img   = sq.datasets.visium_fluo_image_crop()
+adata = sq.datasets.visium_fluo_adata_crop()
+
+sq.pl.spatial_scatter(adata, color="cluster")
+```
+
+> Visualizes gene-expression-derived cluster annotations overlaid on the tissue section.
+
+---
+
+### 2. Fluorescence Image Inspection
+
+The three fluorescence channels are visualized independently to understand signal distribution across tissue regions.
+
+```python
+img.show(channelwise=True)
+```
+
+---
+
+### 3. Image Pre-processing & Nucleus Segmentation
+
+The DAPI channel (channel 0) is smoothed and segmented using a **watershed algorithm** to identify individual nuclei.
+
+```python
+sq.im.process(img=img, layer="image", method="smooth")
+
+sq.im.segment(
+    img=img,
+    layer="image_smooth",
+    method="watershed",
+    channel=0,
+    chunks=1000
+)
+```
+
+The segmented label image assigns a unique integer to each identified nucleus, enabling cell-level quantification within each Visium spot.
+
+---
+
+### 4. Segmentation Feature Extraction
+
+From the segmentation mask, per-spot features are extracted including:
+
+- **Cell count** — number of segmented nuclei per spot
+- **Mean fluorescence intensity** per channel within segmented objects
+
+```python
+sq.im.calculate_image_features(
+    adata, img,
+    features="segmentation",
+    layer="image",
+    key_added="features_segmentation",
+    features_kwargs={"segmentation": {"label_layer": "segmented_watershed"}}
+)
+```
+
+**Key biological findings:**
+- The **pyramidal layer of the Hippocampus** shows higher cell density than surrounding regions — a distinction not captured by gene-space clustering alone.
+- Clusters *Cortex_1* and *Cortex_3* show elevated anti-NEUN signal, indicating **higher neuron density**.
+- *Fiber tracts* and *lateral ventricles* show elevated anti-GFAP signal, consistent with **glial cell enrichment**.
+
+---
+
+### 5. Multi-scale Image Feature Extraction
+
+Summary, histogram, and texture features are calculated at multiple scales to capture both local and contextual morphological information:
+
+| Feature Set | Features | Scale | Context |
+|---|---|---|---|
+| `features_orig` | summary, texture, histogram | 1.0 | Spot only (masked) |
+| `features_context` | summary, histogram | 1.0 | Spot + surroundings |
+| `features_lowres` | summary, histogram | 0.25 | Larger context, lower res |
+
+All feature sets are concatenated into a single `adata.obsm["features"]` matrix for downstream clustering.
+
+---
+
+### 6. Image-based Leiden Clustering
+
+Feature-space clusters are computed using PCA + Leiden clustering and compared to gene-expression clusters.
+
+```python
+sc.pp.scale(adata)
+sc.pp.pca(adata, n_comps=10)
+sc.pp.neighbors(adata)
+sc.tl.leiden(adata)
+```
+
+**Observations:**
+- Image-based clusters are **spatially coherent**, validating the biological signal in extracted features.
+- Feature clusters reveal **finer subdivisions** within the Hippocampus and Cortex compared to gene-space clusters.
+- Different feature types (summary, histogram, texture) yield complementary views of tissue organization.
+
+---
+
+## 📊 Key Figures
+
+| Figure | Description |
+|--------|-------------|
+| `spatial_cluste<img width="642" height="491" alt="grph1" src="https://github.com/user-attachments/assets/8798b155-731a-4d2d-aa4e-8030b56da9bf" />
+rs.png` | Gene-expression Leiden clusters on tissue |
+| `fluorescence_chann<img width="790" height="289" alt="grph2" src="https://github.com/user-attachments/assets/33930952-8339-4586-b82e-930747b1eb64" />
+els.png` | DAPI / anti-NEUN / anti-GFAP channels |
+| `segmentat<img width="976" height="506" alt="grph3" src="https://github.com/user-attachments/assets/6a587dbe-bda1-4677-bc8f-02989b005d09" />
+ion.png` | Raw DAPI vs. watershed segmentation |
+| `segmentation<img width="1088" height="829" alt="grph4" src="https://github.com/user-attachments/assets/1e54aa4d-06f6-44a8-b4e9-4f2a19cd4ed8" />
+_features.png` | Cell count & channel intensity per spot |
+| `feature_cluste<img width="2500" height="2205" alt="grph5" src="https://github.com/user-attachments/assets/67cd113a-b81f-44be-9924-0016fcafdf3e" />
+rs.png` | Summary / histogram / texture clusters vs. gene clusters |
+
+---
+
+## 🛠️ Installation
+
+```bash
+conda env create -f environment.yml
+conda activate squidpy-visium
+jupyter notebook notebooks/visium_fluo_analysis.ipynb
+```
+
+**Core dependencies:**
+squidpy >= 1.2
+scanpy >= 1.9
+anndata >= 0.8
+scikit-image
+pandas
+matplotlib
+
+---
+## 📂 Dataset
+
+- **Source:** [10x Genomics Spatial Gene Expression Datasets](https://support.10xgenomics.com/spatial-gene-expression/datasets)
+- **Tissue:** Mouse brain coronal section (Visium)
+- **Format:** Pre-processed `AnnData` + `ImageContainer` (loaded via `sq.datasets`)
+- **Cluster annotation resources:** Allen Brain Atlas, Linnarsson lab Mouse Brain Atlas
+
+
 
 ## References
 
@@ -199,3 +364,8 @@ This shows us exactly which spatial regions of the brain express these genes.
 - [Squidpy Documentation](https://squidpy.readthedocs.io/)
 - [10x Genomics Visium](https://www.10xgenomics.com/spatial-transcriptomics)
 - Tutorial: https://scanpy-tutorials.readthedocs.io/en/latest/spatial/basic-analysis.html
+- - [Squidpy Documentation](https://squidpy.readthedocs.io/)
+- [Squidpy Paper — Nature Methods (2022)](https://www.nature.com/articles/s41592-021-01358-2)
+- [Original Tutorial](https://squidpy.readthedocs.io/en/stable/notebooks/tutorials/tutorial_visium_fluo.html)
+- Scanpy spatial analysis tutorials
+
